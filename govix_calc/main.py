@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import QApplication
-from govix_calc.ui import DualCalcUI
 import sys
+sys.path.insert(0, "/usr/lib/govix-calc")
+from PySide6.QtWidgets import QApplication
+from ui import DualCalcUI
 
 if __name__=='__main__':
     app = QApplication(sys.argv)
