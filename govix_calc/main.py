@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QApplication
-from govix-calc.ui import DualCalcUI
+from govix_calc.ui import DualCalcUI
 import sys
 
 if __name__=='__main__':
