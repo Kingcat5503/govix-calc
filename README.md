@@ -31,3 +31,8 @@ git clone https://github.com/Kingcat5503/govix-calc.git
 cd govix-calc
 pip install -r requirements.txt
 python main.py
+```
+### 💻 yay (aur helper)
+
+```bash
+yay -S govix-calc
