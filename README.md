@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-structure:
-govix-calc:
-    govix-calc:
-        main.py
-        logic.py
-        settings.py
-        ui.py
-    requirements.txt
-=======
 <h1 align="center">🧮 Govix Calc</h1>
 <p align="center">A modern dual-panel calculator built with Python & PySide6</p>
 
@@ -46,4 +36,4 @@ python main.py
 
 ```bash
 yay -S govix-calc
->>>>>>> 0b5e6c4e6b3367c79634f43f75d0d83e3e23783c
+
