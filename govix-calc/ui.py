@@ -3,9 +3,8 @@ from PySide6.QtWidgets import (
     QGridLayout, QSizePolicy
 )
 from PySide6.QtCore import Qt, Slot, QEvent
-from logic import safe_eval, toggle_sign, calc_percent
-from settings import SettingsDialog
-
+from govix_calc.logic import safe_eval, toggle_sign, calc_percent
+from govix_calc.settings import SettingsDialog
 
 class DualCalcUI(QWidget):
     def __init__(self):

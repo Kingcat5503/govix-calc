@@ -1,10 +1,9 @@
-from PySide6.QtWidgets import QApplication
-from ui import DualCalcUI
 import sys
+from PySide6.QtWidgets import QApplication
+from govix_calc.ui import DualCalcUI
 
-if __name__=='__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = DualCalcUI()
-    window.left_display.setFocus()
-    window.show()
+    win = DualCalcUI()
+    win.show()
     sys.exit(app.exec())
