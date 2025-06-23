@@ -1,0 +1,387 @@
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
+    QGridLayout, QSizePolicy, QSpacerItem
+)
+from PySide6.QtCore import Qt, Slot, QEvent, Signal
+from logic import safe_eval, toggle_sign, calc_percent
+from settings import SettingsDialog
+
+class DualCalcUI(QWidget):
+    """
+    Dual Calculator UI with side-by-side calculator displays.
+
+    This class manages two independent calculator interfaces with the ability
+    to transfer values between them. Focus management ensures input goes to
+    the correct calculator display.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Initialize core state variables
+        self.theme = 'dark'
+        self.focused = 'left'  # Track which calculator has focus
+
+        # Set up the main window properties
+        self.setWindowTitle('DualCalc Linux')
+        self.setMinimumSize(600, 600)
+
+        # Apply initial styling and build the interface
+        self.apply_theme()
+        self.build_ui()
+
+        # Set initial focus to left calculator
+        self.left_display.setFocus()
+
+    def apply_theme(self):
+        """
+        Apply the selected theme (light or dark) to all UI elements.
+
+        Uses Qt stylesheets with gradients and rounded corners for a modern look.
+        The styling affects the main window, input displays, and all buttons.
+        """
+        if self.theme == 'light':
+            self.setStyleSheet("""
+                QWidget {
+                    background: #f0f0f0;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                }
+                QLineEdit {
+                    background: #ffffff;
+                    color: #000000;
+                    font-size: 24px;
+                    font-weight: bold;
+                    padding: 12px;
+                    border: 2px solid #cccccc;
+                    border-radius: 8px;
+                    selection-background-color: #3daee9;
+                }
+                QLineEdit:focus {
+                    border: 2px solid #3daee9;
+                    background: #f8f8f8;
+                }
+                QPushButton {
+                    font-size: 18px;
+                    font-weight: 500;
+                    border: none;
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #fafafa, stop:1 #e0e0e0);
+                    color: #000000;
+                    border-radius: 8px;
+                    padding: 10px;
+                    min-height: 40px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #e5e5e5, stop:1 #d0d0d0);
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #d5d5d5, stop:1 #c0c0c0);
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QWidget {
+                    background: #2b2b2b;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                }
+                QLineEdit {
+                    background: #3c3f41;
+                    color: #ffffff;
+                    font-size: 24px;
+                    font-weight: bold;
+                    padding: 12px;
+                    border: 2px solid #555555;
+                    border-radius: 8px;
+                    selection-background-color: #3daee9;
+                }
+                QLineEdit:focus {
+                    border: 2px solid #3daee9;
+                    background: #404040;
+                }
+                QPushButton {
+                    font-size: 18px;
+                    font-weight: 500;
+                    border: none;
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #6a6a6a, stop:1 #555555);
+                    color: #ffffff;
+                    border-radius: 8px;
+                    padding: 10px;
+                    min-height: 40px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #7a7a7a, stop:1 #666666);
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #5a5a5a, stop:1 #444444);
+                }
+            """)
+
+    def build_ui(self):
+        """
+        Construct the complete user interface layout.
+
+        Creates a vertical layout with:
+        1. Top settings bar
+        2. Dual calculator displays with transfer buttons
+        3. Numeric keypad grid
+        """
+        # Main layout container
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(20)
+
+        # Top bar with settings button
+        self._create_top_bar(main_layout)
+
+        # Dual calculator display area
+        self._create_dual_display_area(main_layout)
+
+        # Numeric keypad
+        self._create_keypad(main_layout)
+
+        self.setLayout(main_layout)
+
+    def _create_top_bar(self, parent_layout):
+        """Create the top bar containing the settings button."""
+        top_bar = QHBoxLayout()
+        top_bar.setSpacing(10)
+        top_bar.addStretch()  # Push settings button to the right
+
+        self.settings_btn = QPushButton('⚙')
+        self.settings_btn.setFixedSize(42, 42)
+        self.settings_btn.setStyleSheet("""
+            font-size: 22px;
+            border: none;
+            background: transparent;
+            color: inherit;
+            border-radius: 21px;
+        """)
+        self.settings_btn.clicked.connect(self.open_settings)
+        self.settings_btn.setToolTip("Open Settings")
+
+        top_bar.addWidget(self.settings_btn)
+        parent_layout.addLayout(top_bar)
+
+    def _create_dual_display_area(self, parent_layout):
+        """
+        Create the dual calculator display area with transfer buttons.
+
+        This creates a horizontal layout with:
+        - Left calculator display
+        - Transfer buttons in the middle
+        - Right calculator display
+        """
+        dual_layout = QVBoxLayout()
+        dual_layout.setSpacing(15)
+
+        # Create the calculator displays
+        self.left_display = QLineEdit()
+        self.right_display = QLineEdit()
+        self.setup_display(self.left_display, 'left')
+        self.setup_display(self.right_display, 'right')
+
+        # Add left display
+        dual_layout.addWidget(self.left_display)
+
+        # Create transfer buttons row
+        transfer_layout = QHBoxLayout()
+        transfer_layout.setSpacing(10)
+
+        # Create transfer buttons with clear labels
+        self.btn_lr_copy = QPushButton('Copy →')
+        self.btn_lr_add = QPushButton('Add →')
+        self.btn_rl_add = QPushButton('← Add')
+        self.btn_rl_copy = QPushButton('← Copy')
+
+        # Connect transfer button signals
+        self.btn_lr_copy.clicked.connect(self.copy_left_to_right)
+        self.btn_rl_copy.clicked.connect(self.copy_right_to_left)
+        self.btn_lr_add.clicked.connect(self.add_left_to_right)
+        self.btn_rl_add.clicked.connect(self.add_right_to_left)
+
+        # Set up transfer button properties
+        transfer_buttons = [self.btn_lr_copy, self.btn_lr_add,
+                          self.btn_rl_add, self.btn_rl_copy]
+
+        for btn in transfer_buttons:
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            btn.setMinimumHeight(35)
+            transfer_layout.addWidget(btn)
+
+        dual_layout.addLayout(transfer_layout)
+        dual_layout.addWidget(self.right_display)
+        parent_layout.addLayout(dual_layout)
+
+    def _create_keypad(self, parent_layout):
+        """
+        Create the numeric keypad with all calculator buttons.
+
+        The keypad includes numbers, operators, and special functions.
+        Some buttons span multiple columns (like 0 and =).
+        """
+        # Define the keypad layout: (text, row, col, rowspan, colspan)
+        keys = [
+            ('C', 0, 0), ('±', 0, 1), ('%', 0, 2), ('←', 0, 3),
+            ('7', 1, 0), ('8', 1, 1), ('9', 1, 2), ('/', 1, 3),
+            ('4', 2, 0), ('5', 2, 1), ('6', 2, 2), ('*', 2, 3),
+            ('1', 3, 0), ('2', 3, 1), ('3', 3, 2), ('-', 3, 3),
+            ('0', 4, 0, 1, 2), ('.', 4, 2), ('+', 4, 3),
+            ('(', 5, 0), (')', 5, 1), ('=', 5, 2, 1, 2)
+        ]
+
+        grid = QGridLayout()
+        grid.setSpacing(8)
+
+        for key_data in keys:
+            text = key_data[0]
+            row = key_data[1]
+            col = key_data[2]
+            rowspan = key_data[3] if len(key_data) > 3 else 1
+            colspan = key_data[4] if len(key_data) > 4 else 1
+
+            btn = QPushButton(text)
+            btn.setMinimumSize(60, 60)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+            # Use a proper closure to capture the key value
+            # This fixes the lambda variable capture issue
+            btn.clicked.connect(self._make_key_handler(text))
+
+            grid.addWidget(btn, row, col, rowspan, colspan)
+
+        parent_layout.addLayout(grid)
+
+    def setup_display(self, display, side):
+        """
+        Configure a calculator display widget.
+
+        Args:
+            display: The QLineEdit widget to configure
+            side: 'left' or 'right' to identify which display this is
+        """
+        display.setReadOnly(True)
+        display.setAlignment(Qt.AlignRight)
+        display.setFixedHeight(70)
+        display.setPlaceholderText("0")
+
+        # Install event filter to track focus changes
+        display.installEventFilter(self)
+
+        # Make displays clickable to change focus
+        display.setFocusPolicy(Qt.ClickFocus)
+
+    def _make_key_handler(self, key):
+        """
+        Create a proper closure for button click handlers.
+
+        This solves the lambda variable capture problem by creating
+        a closure that properly captures the key value at creation time.
+
+        Args:
+            key: The key character this handler should process
+
+        Returns:
+            A callable that handles the key press
+        """
+        def handler():
+            self.on_key(key)
+        return handler
+
+    def eventFilter(self, source, event):
+        """
+        Handle focus events to track which calculator is active.
+
+        This is crucial for ensuring keyboard input goes to the correct display.
+        """
+        if event.type() == QEvent.FocusIn:
+            if source == self.left_display:
+                self.focused = 'left'
+            elif source == self.right_display:
+                self.focused = 'right'
+        return super().eventFilter(source, event)
+
+    @Slot()
+    def on_key(self, key):
+        """
+        Handle key press events for calculator operations.
+
+        Routes the key press to the currently focused calculator display
+        and performs the appropriate operation based on the key.
+
+        Args:
+            key: The key character that was pressed
+        """
+        # Get the currently focused display
+        current_display = (self.left_display if self.focused == 'left'
+                          else self.right_display)
+        current_text = current_display.text()
+
+        # Handle different key types
+        if key == 'C':
+            current_display.clear()
+        elif key == '←':
+            # Backspace: remove last character
+            current_display.setText(current_text[:-1])
+        elif key == '±':
+            # Toggle sign
+            current_display.setText(toggle_sign(current_text))
+        elif key == '%':
+            # Calculate percentage
+            current_display.setText(calc_percent(current_text))
+        elif key == '=':
+            # Evaluate expression
+            result = safe_eval(current_text)
+            current_display.setText(result)
+        else:
+            # Regular input: append to current text
+            current_display.setText(current_text + key)
+
+    @Slot()
+    def copy_left_to_right(self):
+        """Copy the value from left calculator to right calculator."""
+        self.right_display.setText(self.left_display.text())
+        self.right_display.setFocus()  # Switch focus to right display
+
+    @Slot()
+    def copy_right_to_left(self):
+        """Copy the value from right calculator to left calculator."""
+        self.left_display.setText(self.right_display.text())
+        self.left_display.setFocus()  # Switch focus to left display
+
+    @Slot()
+    def add_left_to_right(self):
+        """Append left calculator value to right calculator."""
+        current_right = self.right_display.text()
+        left_value = self.left_display.text()
+        self.right_display.setText(current_right + left_value)
+        self.right_display.setFocus()  # Switch focus to right display
+
+    @Slot()
+    def add_right_to_left(self):
+        """Append right calculator value to left calculator."""
+        current_left = self.left_display.text()
+        right_value = self.right_display.text()
+        self.left_display.setText(current_left + right_value)
+        self.left_display.setFocus()  # Switch focus to left display
+
+    @Slot()
+    def open_settings(self):
+        """
+        Open the settings dialog to change application preferences.
+
+        Currently handles theme switching between light and dark modes.
+        """
+        dialog = SettingsDialog(self, current_theme=self.theme)
+
+        if dialog.exec():  # If user clicked OK/Accept
+            new_theme = dialog.selected_theme()
+            if new_theme != self.theme:
+                self.theme = new_theme
+                self.apply_theme()
+
+                # Optional: Save theme preference to settings file
+                # This would require additional implementation
